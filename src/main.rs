@@ -1,7 +1,7 @@
 mod command_ext;
 mod git;
 
-use std::process::Command;
+use std::{path::PathBuf, process::Command, str::FromStr};
 
 use anyhow::Context;
 use clap::Parser;
@@ -24,14 +24,36 @@ enum Subcommand {
 
 #[derive(clap::Args)]
 struct UpdateAllArgs {
-    // TODO: --exclude for Cargo.lock (or containing directories) to ignore.
+    /// Exclude "Cargo.lock" files or containing directories.
+    ///
+    /// Must be specified relative to the current working directory.
+    #[arg(long)]
+    exclude: Vec<String>,
+
+    /// Run `cargo check` after applying updates.
+    #[arg(long)]
+    check: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match &cli.subcommand {
-        Subcommand::UpdateAll(_update_all_args) => {
+        Subcommand::UpdateAll(update_all_args) => {
+            // Validate that all exclude rules point to actual paths.
+            // (It's bad to let people think that their arguments are doing something if they're not!)
+            let mut exclude_paths = Vec::new();
+            for exclude in &update_all_args.exclude {
+                let exclude_path = PathBuf::from_str(exclude)
+                    .with_context(|| "\"{exclude:?}\" isn't a valid path")?;
+                if !exclude_path.exists() {
+                    anyhow::bail!("Excluded path {exclude_path:?} doesn't exist!");
+                }
+                exclude_paths.push(exclude_path.canonicalize().with_context(|| {
+                    format!("Failed to canonicalize exclude path {exclude_path:?}")
+                })?);
+            }
+
             // TODO: Find git root by default instead of just operating from CWD.
             // (Have option for operating just within CWD.)
 
@@ -67,10 +89,22 @@ fn main() -> anyhow::Result<()> {
                     .parent()
                     .context("Cargo lockfile didn't have a parent directory")?;
 
+                let absolute_path = entry
+                    .path()
+                    .canonicalize()
+                    .with_context(|| format!("Failed to canonicalize path {:?}", entry.path()))?;
+                if exclude_paths
+                    .iter()
+                    .any(|exclude_path| absolute_path.starts_with(exclude_path))
+                {
+                    println!("  Skipping {dir:?} because it matches an excluded path.");
+                    continue;
+                }
+
                 println!("  Running `cargo update` in {dir:?}...");
 
                 let mut cmd = Command::new("cargo");
-                cmd.arg("update").null_io().current_dir(dir);
+                cmd.arg("update").current_dir(dir);
                 // TODO: Don't blow up the whole process if we fail in here.
                 cmd.success_or_err().context("`cargo update` failed")?;
                 if is_working_tree_clean()? {
@@ -78,9 +112,14 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 }
 
-                // TODO: Optionally `cargo-check`, etc.
-
                 any_changes = true;
+
+                if update_all_args.check {
+                    println!("  Running `cargo check` in {dir:?}...");
+                    let mut cmd = Command::new("cargo");
+                    cmd.arg("check").current_dir(dir);
+                    cmd.success_or_err().context("`cargo check` failed")?;
+                }
 
                 println!("    Committing updates...");
                 let message = format!("cargo update in {dir:?}\n\nAll semver-compatible-updates, by running `cargo update`.\nThis commit was created by `cargo-lockstep`.");

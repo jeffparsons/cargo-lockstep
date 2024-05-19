@@ -69,7 +69,7 @@ fn main() -> anyhow::Result<()> {
             // Make a branch based on the current time.
             let compact_now = chrono::Utc::now().format("%Y%m%d%H%M%S");
             let new_branch_name = format!("cargo-lockstep-update-all-{compact_now}");
-            switch_to_new_branch(&new_branch_name, &base_branch)
+            switch_to_new_branch(&new_branch_name, &format!("origin/{base_branch}"))
                 .context("Failed to create branch for applying updates")?;
 
             // Find all the Cargo lockfiles so we can run `cargo update` in those directories.

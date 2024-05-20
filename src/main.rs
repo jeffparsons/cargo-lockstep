@@ -115,9 +115,9 @@ fn main() -> anyhow::Result<()> {
                 any_changes = true;
 
                 if update_all_args.check {
-                    println!("  Running `cargo check` in {dir:?}...");
+                    println!("  Running `cargo check --all-targets` in {dir:?}...");
                     let mut cmd = Command::new("cargo");
-                    cmd.arg("check").current_dir(dir);
+                    cmd.args(["check", "--all-targets"]).current_dir(dir);
                     cmd.success_or_err().context("`cargo check` failed")?;
                 }
 

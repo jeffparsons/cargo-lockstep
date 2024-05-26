@@ -1,4 +1,4 @@
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Command, ExitStatus, Output, Stdio};
 
 use anyhow::Context;
 
@@ -7,6 +7,8 @@ pub trait CommandExt {
     fn clean_exit_status(&mut self) -> anyhow::Result<ExitStatus>;
     fn clean_exit_code(&mut self) -> anyhow::Result<i32>;
     fn success_or_err(&mut self) -> anyhow::Result<()>;
+    fn clean_output(&mut self) -> anyhow::Result<Output>;
+    fn output_if_success_else_err(&mut self) -> anyhow::Result<Output>;
 }
 
 impl CommandExt for Command {
@@ -34,5 +36,18 @@ impl CommandExt for Command {
             anyhow::bail!("`{self:?}` returned a nonzero exit code");
         }
         Ok(())
+    }
+
+    fn clean_output(&mut self) -> anyhow::Result<Output> {
+        self.output()
+            .with_context(|| format!("Failed to start `{:?}`", self))
+    }
+
+    fn output_if_success_else_err(&mut self) -> anyhow::Result<Output> {
+        let output = self.clean_output()?;
+        if !output.status.success() {
+            anyhow::bail!("`{self:?}` returned a nonzero exit code");
+        }
+        Ok(output)
     }
 }

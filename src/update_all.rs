@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 
 use crate::{command_ext::CommandExt as _, git};
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 pub struct UpdateAllArgs {
     /// Exclude "Cargo.lock" files or containing directories.
     ///

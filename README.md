@@ -1,6 +1,6 @@
 # cargo-lockstep
 
-WIP.
+WIP. Full of hacks and bugs.
 
 Designed primarily for monorepos.
 
